@@ -1,252 +1,164 @@
-一、准备LNMP
+一、防火墙
 ```
-# yum安装nginx
-yum install nginx -y
+# 开启防火墙
+systemctl start firewalld
 
-# 修改配置
-vi  /etc/nginx/conf.d/default.conf
-server {
-    listen       80 default_server;
-    # listen       [::]:80 default_server;
-    server_name  _;
-    root         /usr/share/nginx/html;
+# 关闭防火墙【临时】
+systemctl stop firewalld
 
-    # Load configuration files for the default server block.
-    include /etc/nginx/default.d/*.conf;
+# 关闭防火墙【永久】
+systemctl disable firewalld
 
-    location / {
-    }
+# 查看防火墙状态
+systemctl status firewalld 或者 firewall-cmd --state
 
-    error_page 404 /404.html;
-        location = /40x.html {
-    }
+# 开放指定端口
+firewall-cmd --zone=public --add-port=80/tcp --permanent
 
-    error_page 500 502 503 504 /50x.html;
-        location = /50x.html {
-    }
+# 关闭指定端口
+firewall-cmd --zone=public --remove-port=80/tcp --permanent
 
-}
+# 重新载入
+firewall-cmd --reload
 
-# 启动nginx
-nginx
+# 查看开放的端口
+firewall-cmd --zone=public --list-ports
 
-# 设置nginx开机自启动
-chkconfig nginx on
+# 查看所有规则
+firewall-cmd --list-all
 
-# 访问外网 HTTP 服务
-http://xx.xx.xx.xx/
+# 开通指定地址端口
+firewall-cmd --permanent --add-rich-rule="rule family="ipv4" source address="x.x.x.x" port protocol="tcp" port="8080" accept"
 
-# yum安装mysql
-yum install mysql-server -y
-
-# 设置mysql开机自启
-chkconfig mysqld on
-
-# 重启mysql
-service mysqld restart
-
-# 设置mysql的root密码
-/usr/bin/mysqladmin -u root password '123456'
+# 禁用指定地址端口
+firewall-cmd --permanent --add-rich-rule="rule family="ipv4" source address="x.x.x.x" port protocol="tcp" port="8080" reject"
 ```
 
-二、搭建php环境
+二、用户与用户组
 ```
-# yum安装php
-yum install php php-fpm php-mysql -y
+# 创建用户
+useradd user1  //创建用户user1
+useradd –e 12/30/2009 user2  //创建user2,指定有效期2009-12-30到期。用户的缺省UID从500向后顺序增加，500以下作为系统保留账号，可以指定UID
+useradd –u 600 user3
 
-# 启动php-fpm进程
-service php-fpm start
+# 使用 passwd 命令为新建用户设置密码
+passwd user1  //注意：没有设置密码的用户不能使用
 
-# 查看php-fpm进程监听哪个端口
-netstat -nlpt | grep php-fpm
+# 命令 usermod 修改用户账户
+usermod –l u1 user1  //将用户 user1的登录名改为  u1
+usermod –g users user1  //将用户 user1 加入到 users组中
+usermod –d /users/us1 user1  //将用户 user1 目录改为/users/us1
 
-# 设置php-fpm开机自启
-chkconfig php-fpm on
-```
+# 使用命令 userdel 删除用户账户
+userdel user2  //删除用户user2
+userdel –r user3  //删除用户 user3，同时删除他的工作目录
 
-三、配置nginx并运行php程序
-```
-# 新建php.conf文件
-touch /etc/nginx/conf.d/php.conf
+# 查看用户信息
+finger user4  //可以查看用户的主目录、启动shell、用户名、地址、电话等信息  
+id user4  //id命令查看一个用户的UID和GID, 查看user4的id  
 
-# 修改文件，配置nginx端口
-vi /etc/nginx/conf.d/php.conf
-server {
-    listen 8000;
-    # pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
-    location ~ \.php$ {
-        root           /usr/share/php;
-        fastcgi_pass   127.0.0.1:9000;
-        fastcgi_index  index.php;
-        fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
-        include        fastcgi_params;
-    }
-}
+# groupadd命令创建用户组
+groupadd –g 888 users  //创建一个组users，其GID为888
 
-# 重启nginx服务
-service nginx restart
+# 命令 gpasswd为组添加用户，只有root和组管理员能够改变组的成员
+gpasswd –a user1 users  //把 user1加入users组
+gpasswd –d user1 users  //把 user1退出users组  
 
-# 新建info.php文件
-touch /usr/share/php/info.php
+# 命令groupmod修改组
+groupmod –n user users  //修改组名user为users
 
-# 配置 info.php
-vi /usr/share/php/info.php
-<?php phpinfo(); ?>
-
-# 访问info.php页面
-http://xx.xx.xx.xx:8000/info.php
+# groupdel删除组  
+groupdel users   //删除组users
 ```
 
-四、安装并配置wordpress
+三、限制账号
 ```
-# yum安装wordpress
-yum install wordpress -y
+# 只允许test组用户su到root
+vi /etc/pam.d/su
+添加auth required pam_wheel.so group=test。
 
-# wordpress源代码目录
-/usr/share/wordpress
-
-# 进入mysql
-mysql -uroot --password='123456'
-
-# 为wordpress创建数据库
-CREATE DATABASE wordpress;
-
-#退出mysql环境
-exit
-
-#修改wordpress配置
-vi /usr/share/wordpress/wp-config.php
-<?php
-/**
- * The base configuration for WordPress
- *
- * The wp-config.php creation script uses this file during the
- * installation. You don't have to use the web site, you can
- * copy this file to "wp-config.php" and fill in the values.
- *
- * This file contains the following configurations:
- *
- * * MySQL settings
- * * Secret keys
- * * Database table prefix
- * * ABSPATH
- *
- * @link https://codex.wordpress.org/Editing_wp-config.php
- *
- * @package WordPress
- */
-
-// ** MySQL settings - You can get this info from your web host ** //
-/** The name of the database for WordPress */
-define('DB_NAME', 'wordpress');
-
-/** MySQL database username */
-define('DB_USER', 'root');
-
-/** MySQL database password */
-define('DB_PASSWORD', '123456');
-
-/** MySQL hostname */
-define('DB_HOST', 'localhost');
-
-/** Database Charset to use in creating database tables. */
-define('DB_CHARSET', 'utf8');
-
-/** The Database Collate type. Don't change this if in doubt. */
-define('DB_COLLATE', '');
-
-/**#@+
- * Authentication Unique Keys and Salts.
- *
- * Change these to different unique phrases!
- * You can generate these using the {@link https://api.wordpress.org/secret-key/1.1/salt/ WordPress.org secret-key service}
- * You can change these at any point in time to invalidate all existing cookies. This will force all users to have to log in again.
- *
- * @since 2.6.0
- */
-define('AUTH_KEY',         'put your unique phrase here');
-define('SECURE_AUTH_KEY',  'put your unique phrase here');
-define('LOGGED_IN_KEY',    'put your unique phrase here');
-define('NONCE_KEY',        'put your unique phrase here');
-define('AUTH_SALT',        'put your unique phrase here');
-define('SECURE_AUTH_SALT', 'put your unique phrase here');
-define('LOGGED_IN_SALT',   'put your unique phrase here');
-define('NONCE_SALT',       'put your unique phrase here');
-
-/**#@-*/
-
-/**
- * WordPress Database Table prefix.
- *
- * You can have multiple installations in one database if you give each
- * a unique prefix. Only numbers, letters, and underscores please!
- */
-$table_prefix  = 'wp_';
-
-/**
- * See http://make.wordpress.org/core/2013/10/25/the-definitive-guide-to-disabling-auto-updates-in-wordpress-3-7
- */
-
-/* Disable all file change, as RPM base installation are read-only */
-define('DISALLOW_FILE_MODS', true);
-
-/* Disable automatic updater, in case you want to allow
-   above FILE_MODS for plugins, themes, ... */
-define('AUTOMATIC_UPDATER_DISABLED', true);
-
-/* Core update is always disabled, WP_AUTO_UPDATE_CORE value is ignore */
-
-/**
- * For developers: WordPress debugging mode.
- *
- * Change this to true to enable the display of notices during development.
- * It is strongly recommended that plugin and theme developers use WP_DEBUG
- * in their development environments.
- *
- * For information on other constants that can be used for debugging,
- * visit the Codex.
- *
- * @link https://codex.wordpress.org/Debugging_in_WordPress
- */
-define('WP_DEBUG', false);
-
-/* That's all, stop editing! Happy blogging. */
-
-/** Absolute path to the WordPress directory. */
-if ( !defined('ABSPATH') )
-    define('ABSPATH', '/usr/share/wordpress');
-
-/** Sets up WordPress vars and included files. */
-require_once(ABSPATH . 'wp-settings.php');
-
-# 默认的 Server 监听 80 端口，与 WordPress 的服务端口冲突，将其重命名为 .bak 后缀以禁用默认配置
-cd /etc/nginx/conf.d/ && mv default.conf defaut.conf.bak 
-
-# 创建 wordpress.conf
-touch /etc/nginx/conf.d/wordpress.conf
-
-# 配置nginx
-vi /etc/nginx/conf.d/wordpress.conf
-server {
-    listen 80;
-    root /usr/share/wordpress;
-    location / {
-        index index.php index.html index.htm;
-        try_files $uri $uri/ /index.php index.php;
-    }
-    # pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
-    location ~ \.php$ {
-        fastcgi_pass   127.0.0.1:9000;
-        fastcgi_index  index.php;
-        fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
-        include        fastcgi_params;
-    }
-}
-
-# 重新加载nginx进程
-nginx -s reload
-
-# 访问博客地址
-http://106.55.241.193:80/wp-admin/install.php
-
+# 禁止root用户直接登录
+创建普通权限账号并配置密码,防止无法远程登录;
+vi /etc/ssh/sshd_config
+修改配置文件将PermitRootLogin的值改成no
+service sshd restart
 ```
+
+四、检查特殊账号，禁用或删除
+```
+查看空口令和root权限账号，确认是否存在异常账号：
+# 查看空口令账号
+awk -F: '($2=="")' /etc/shadow
+
+# 查看UID为零的账号
+使用命令 awk -F: '($3==0)' /etc/passwd
+
+# 加固空口令账号
+passwd <用户名> 为空口令账号设定密码
+确认UID为零的账号只有root账号
+
+# 删除不必要的账号
+userdel <用户名> 
+
+# 锁定不必要的账号
+passwd -l <用户名> 
+
+# 解锁必要的账号
+passwd -u <用户名> 
+```
+
+五、SSH服务加固
+```
+vi /etc/ssh/sshd_config
+
+# 不允许root账号直接登录系统
+设置 PermitRootLogin 的值为 no
+
+# 修改SSH使用的协议版本
+设置 Protocol 的版本为 2
+
+# 修改允许密码错误次数（默认6次）
+设置 MaxAuthTries 的值为 3
+
+配置文件修改完成后，重启sshd服务生效
+```
+
+六、日志记录
+```
+Linux系统默认启用以下类型日志：
+1、系统日志（默认）/var/log/messages
+2、cron日志（默认）/var/log/cron
+3、安全日志（默认）/var/log/secure
+
+# 通过脚本代码实现记录所有用户的登录操作日志
+vim /etc/profile
+ history
+ USER=`whoami`
+ USER_IP=`who -u am i 2>/dev/null| awk '{print $NF}'|sed -e 's/[()]//g'`
+ if [ "$USER_IP" = "" ]; then
+ USER_IP=`hostname`
+ fi
+ if [ ! -d /var/log/history ]; then
+ mkdir /var/log/history
+ chmod 777 /var/log/history
+ fi
+ if [ ! -d /var/log/history/${LOGNAME} ]; then
+ mkdir /var/log/history/${LOGNAME}
+ chmod 300 /var/log/history/${LOGNAME}
+ fi
+ export HISTSIZE=4096
+ DT=`date +"%Y%m%d_%H:%M:%S"`
+ export HISTFILE="/var/log/history/${LOGNAME}/${USER}@${USER_IP}_$DT"
+ chmod 600 /var/log/history/${LOGNAME}/*history* 2>/dev/null
+
+# 加载配置生效
+source /etc/profile
+
+# 日志存放位置
+/var/log/history
+
+每次用户退出后都会产生以用户名、登录IP、时间的日志文件，包含此用户本次的所有操作
+```
+
+
+
